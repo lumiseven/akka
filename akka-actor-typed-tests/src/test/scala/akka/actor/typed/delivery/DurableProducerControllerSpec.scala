@@ -18,6 +18,7 @@ import org.scalatest.wordspec.AnyWordSpecLike
 class DurableProducerControllerSpec
     extends ScalaTestWithActorTestKit("""
   akka.reliable-delivery.consumer-controller.flow-control-window = 20
+  akka.reliable-delivery.consumer-controller.resend-interval-min = 1s
   """)
     with AnyWordSpecLike
     with LogCapturing {

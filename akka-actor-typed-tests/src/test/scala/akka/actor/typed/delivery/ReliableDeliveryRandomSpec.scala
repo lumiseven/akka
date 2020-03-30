@@ -41,12 +41,12 @@ object ReliableDeliveryRandomSpec {
   }
 }
 
-class ReliableDeliveryRandomSpec
-    extends ScalaTestWithActorTestKit("""
-  akka.reliable-delivery.consumer-controller.flow-control-window = 20
-  """)
-    with AnyWordSpecLike
-    with LogCapturing {
+class ReliableDeliveryRandomSpec extends ScalaTestWithActorTestKit("""
+  akka.reliable-delivery.consumer-controller {
+    flow-control-window = 20
+    resend-interval-min = 1s
+  }
+  """) with AnyWordSpecLike with LogCapturing {
   import ReliableDeliveryRandomSpec._
 
   private var idCount = 0
