@@ -4,6 +4,7 @@
 
 package akka.serialization.jackson
 
+import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDateTime
@@ -17,6 +18,7 @@ import java.util.logging.FileHandler
 import scala.collection.immutable
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration._
+
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import akka.actor.Address
@@ -626,6 +628,20 @@ abstract class JacksonSerializerSpec(serializerName: String)
     val manifest = serializer.manifest(obj)
     val serializerId = serializer.identifier
     val blob = serializeToBinary(obj)
+
+    // Issue #28918, check that CBOR format is used (not JSON).
+    if (blob.length > 0) {
+      serializer match {
+        case _: JacksonJsonSerializer =>
+          if (!JacksonSerializer.isGZipped(blob))
+            new String(blob.take(1), StandardCharsets.UTF_8) should ===("{")
+        case _: JacksonCborSerializer =>
+          new String(blob.take(1), StandardCharsets.UTF_8) should !==("{")
+        case _ =>
+          throw new IllegalArgumentException(s"Unexpected serializer $serializer")
+      }
+    }
+
     val deserialized = deserializeFromBinary(blob, serializerId, manifest, sys)
     deserialized should ===(obj)
   }
