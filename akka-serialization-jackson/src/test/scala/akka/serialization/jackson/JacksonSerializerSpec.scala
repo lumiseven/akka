@@ -571,6 +571,17 @@ class JacksonJsonSerializerSpec extends JacksonSerializerSpec("jackson-json") {
       """)(sys => checkSerialization(Elephant("Dumbo", 1), sys))
       }
     }
+
+    // issue #28918
+    "cbor compatibility for reading json" in {
+      val msg = SimpleCommand("abc")
+      val jsonSerializer = serializerFor(msg)
+      jsonSerializer.identifier should ===(31)
+      val manifest = jsonSerializer.manifest(msg)
+      val bytes = jsonSerializer.toBinary(msg)
+      val deserialized = serialization().deserialize(bytes, 32, manifest).get
+      deserialized should be(msg)
+    }
   }
 }
 
