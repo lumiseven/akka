@@ -8,6 +8,7 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.typed
+import akka.actor.typed.ActorRef
 import akka.actor.typed.BackoffSupervisorStrategy
 import akka.actor.typed.Behavior
 import akka.actor.typed.BehaviorInterceptor
@@ -29,9 +30,9 @@ import akka.persistence.typed.DeleteSnapshotsCompleted
 import akka.persistence.typed.DeleteSnapshotsFailed
 import akka.persistence.typed.DeletionTarget
 import akka.persistence.typed.EventAdapter
-import akka.persistence.typed.SnapshotAdapter
 import akka.persistence.typed.NoOpEventAdapter
 import akka.persistence.typed.PersistenceId
+import akka.persistence.typed.SnapshotAdapter
 import akka.persistence.typed.SnapshotCompleted
 import akka.persistence.typed.SnapshotFailed
 import akka.persistence.typed.SnapshotSelectionCriteria
@@ -55,6 +56,16 @@ private[akka] object EventSourcedBehaviorImpl {
     }
   }
   final case class WriterIdentity(instanceId: Int, writerUuid: String)
+
+  /**
+   * Used by EventSourcedBehaviorTestKit to retrieve the `persistenceId`.
+   */
+  final case class GetPersistenceId(replyTo: ActorRef[PersistenceId]) extends Signal
+
+  /**
+   * Used by EventSourcedBehaviorTestKit to retrieve the state.
+   */
+  final case class GetState[State](replyTo: ActorRef[State]) extends Signal
 
 }
 
@@ -112,6 +123,8 @@ private[akka] final case class EventSourcedBehaviorImpl[Command, Event, State](
         ctx.log.debug("Events successfully deleted to sequence number [{}].", toSequenceNr)
       case (_, DeleteEventsFailed(toSequenceNr, failure)) =>
         ctx.log.warn2("Failed to delete events to sequence number [{}] due to: {}", toSequenceNr, failure.getMessage)
+      case (state, get: EventSourcedBehaviorImpl.GetState[State])  => get.replyTo ! state
+      case (_, EventSourcedBehaviorImpl.GetPersistenceId(replyTo)) => replyTo ! persistenceId
     }
 
     // do this once, even if the actor is restarted

@@ -322,7 +322,9 @@ private[akka] object Running {
         state = state.copy(receivedPoisonPill = true)
         this
       case signal =>
-        if (setup.onSignal(visibleState.state, signal, catchAndLog = false)) this
+        if (signal.isInstanceOf[EventSourcedBehaviorImpl.GetState[_]])
+          Behaviors.same // FIXME should all signals be stashed when PersistingEvents
+        else if (setup.onSignal(visibleState.state, signal, catchAndLog = false)) this
         else Behaviors.unhandled
     }
 
@@ -414,7 +416,9 @@ private[akka] object Running {
         // wait for snapshot response before stopping
         new StoringSnapshot(state.copy(receivedPoisonPill = true), sideEffects, snapshotReason)
       case signal =>
-        if (setup.onSignal(state.state, signal, catchAndLog = false))
+        if (signal.isInstanceOf[EventSourcedBehaviorImpl.GetState[_]])
+          Behaviors.same // FIXME should all signals be stashed when StoringSnapshot
+        else if (setup.onSignal(state.state, signal, catchAndLog = false))
           Behaviors.same
         else
           Behaviors.unhandled

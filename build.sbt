@@ -276,6 +276,7 @@ lazy val persistenceTestkit = akkaModule("akka-persistence-testkit")
   .dependsOn(
     persistenceTyped % "compile->compile;provided->provided;test->test",
     testkit % "compile->compile;test->test",
+    actorTestkitTyped,
     persistenceTck % "test")
   .settings(Dependencies.persistenceTestKit)
   .settings(AutomaticModuleName.settings("akka.persistence.testkit"))
