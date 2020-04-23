@@ -44,7 +44,8 @@ object ReliableDeliveryRandomSpec {
 class ReliableDeliveryRandomSpec extends ScalaTestWithActorTestKit("""
   akka.reliable-delivery.consumer-controller {
     flow-control-window = 20
-    resend-interval-min = 1s
+    resend-interval-min = 500 ms
+    resend-interval-max = 2 s
   }
   """) with AnyWordSpecLike with LogCapturing {
   import ReliableDeliveryRandomSpec._

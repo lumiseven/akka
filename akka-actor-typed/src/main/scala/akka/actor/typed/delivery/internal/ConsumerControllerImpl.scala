@@ -130,8 +130,7 @@ import akka.annotation.InternalApi
                     context.watchWith(s.deliverTo, ConsumerTerminated(s.deliverTo))
 
                     flightRecorder.consumerStarted(context.self.path)
-                    // FIXME separate config for min and max resendInterval
-                    val retryTimer = new RetryTimer(timers, settings.resendIntervalMin, settings.resendIntervalMin * 10)
+                    val retryTimer = new RetryTimer(timers, settings.resendIntervalMin, settings.resendIntervalMax)
                     val activeBehavior =
                       new ConsumerControllerImpl[A](context, retryTimer, stashBuffer, settings)
                         .active(initialState(context, s, registering, stopping))
@@ -214,32 +213,35 @@ import akka.annotation.InternalApi
 
   private class RetryTimer(
       timers: TimerScheduler[ConsumerControllerImpl.InternalCommand],
-      minBackoff: FiniteDuration,
+      val minBackoff: FiniteDuration,
       maxBackoff: FiniteDuration) {
-    private var interval = minBackoff
+    private var _interval = minBackoff
+
+    def interval(): FiniteDuration =
+      _interval
 
     def start(): Unit = {
-      interval = minBackoff
-      timers.startTimerWithFixedDelay(Retry, interval)
+      _interval = minBackoff
+      timers.startTimerWithFixedDelay(Retry, _interval)
     }
 
     def scheduleNext(): Unit = {
       val newInterval =
-        if (interval eq maxBackoff)
+        if (_interval eq maxBackoff)
           maxBackoff
         else
-          maxBackoff.min(interval * 1.5) match {
+          maxBackoff.min(_interval * 1.5) match {
             case f: FiniteDuration => f
             case _                 => maxBackoff
           }
-      if (newInterval != interval) {
-        interval = newInterval
-        timers.startTimerWithFixedDelay(Retry, interval)
+      if (newInterval != _interval) {
+        _interval = newInterval
+        timers.startTimerWithFixedDelay(Retry, _interval)
       }
     }
 
     def reset(): Unit = {
-      if (interval ne minBackoff)
+      if (_interval ne minBackoff)
         start()
     }
 
@@ -584,6 +586,8 @@ private class ConsumerControllerImpl[A](
 
   private def receiveRetry(s: State[A], nextBehavior: () => Behavior[InternalCommand]): Behavior[InternalCommand] = {
     retryTimer.scheduleNext()
+    if (retryTimer.interval() != retryTimer.minBackoff)
+      context.log.debug("Schedule next retry in [{} ms]", retryTimer.interval().toMillis)
     s.registering match {
       case None => nextBehavior()
       case Some(reg) =>
