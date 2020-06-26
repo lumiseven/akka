@@ -9,6 +9,8 @@ import java.util.concurrent.TimeUnit.NANOSECONDS
 
 import scala.concurrent.duration._
 
+import com.typesafe.config.ConfigFactory
+
 import akka.actor.ActorIdentity
 import akka.actor.Identify
 import akka.actor.testkit.typed.scaladsl.TestProbe
@@ -35,7 +37,7 @@ import akka.remote.testkit.MultiNodeConfig
 import akka.remote.testkit.MultiNodeSpec
 import akka.remote.testkit.PerfFlamesSupport
 import akka.serialization.jackson.CborSerializable
-import com.typesafe.config.ConfigFactory
+import akka.actor.typed.scaladsl.LoggerOps
 
 object DeliveryThroughputSpec extends MultiNodeConfig {
   val first = role("first")
@@ -231,6 +233,7 @@ object DeliveryThroughputSpec extends MultiNodeConfig {
 
     case object Run extends Command
     private case class WrappedRequestNext(r: ShardingProducerController.RequestNext[Consumer.Command]) extends Command
+    private case object PrintStatus extends Command
 
     def apply(
         producerController: ActorRef[ShardingProducerController.Command[Consumer.Command]],
@@ -239,35 +242,54 @@ object DeliveryThroughputSpec extends MultiNodeConfig {
         resultReporter: BenchmarkFileReporter): Behavior[Command] = {
       val numberOfMessages = testSettings.totalMessages
 
-      Behaviors.setup { context =>
-        val requestNextAdapter =
-          context.messageAdapter[ShardingProducerController.RequestNext[Consumer.Command]](WrappedRequestNext(_))
-        var startTime = System.nanoTime()
-        var remaining = numberOfMessages + context.system.settings.config
-            .getInt("akka.reliable-delivery.sharding.consumer-controller.flow-control-window")
+      Behaviors.withTimers { timers =>
+        Behaviors.setup { context =>
+          timers.startTimerWithFixedDelay(PrintStatus, 1.second)
+          val requestNextAdapter =
+            context.messageAdapter[ShardingProducerController.RequestNext[Consumer.Command]](WrappedRequestNext(_))
+          var startTime = System.nanoTime()
+          var remaining = numberOfMessages + context.system.settings.config
+              .getInt("akka.reliable-delivery.sharding.consumer-controller.flow-control-window")
+          var latestDemand: ShardingProducerController.RequestNext[Consumer.Command] = null
+          var messagesSentToEachEntity: Map[String, Long] = Map.empty[String, Long].withDefaultValue(0L)
 
-        Behaviors.receiveMessage {
-          case WrappedRequestNext(next) =>
-            remaining -= 1
-            if (remaining == 0) {
-              context.log.info("Completed {} messages", numberOfMessages)
-              Producer.reportEnd(startTime, testSettings, plotRef, resultReporter)
-              Behaviors.stopped
-            } else {
-              val entityId = (remaining % testSettings.numberOfConsumers).toString
-              if (next.entitiesWithDemand(entityId) || !next.bufferedForEntitiesWithoutDemand.contains(entityId))
-                next.sendNextTo ! ShardingEnvelope(entityId, Consumer.TheMessage)
+          Behaviors.receiveMessage {
+            case WrappedRequestNext(next) =>
+              latestDemand = next
+              remaining -= 1
+              if (remaining == 0) {
+                context.log.info("Completed {} messages", numberOfMessages)
+                Producer.reportEnd(startTime, testSettings, plotRef, resultReporter)
+                Behaviors.stopped
+              } else {
+                val entityId = (remaining % testSettings.numberOfConsumers).toString
+                if (next.entitiesWithDemand(entityId) || !next.bufferedForEntitiesWithoutDemand.contains(entityId)) {
+                  messagesSentToEachEntity =
+                    messagesSentToEachEntity.updated(entityId, messagesSentToEachEntity(entityId) + 1L)
+
+                  next.sendNextTo ! ShardingEnvelope(entityId, Consumer.TheMessage)
+                }
+                Behaviors.same
+              }
+            case Run =>
+              context.log.info("Starting {} messages", numberOfMessages)
+              startTime = System.nanoTime()
+              producerController ! ShardingProducerController.Start(requestNextAdapter)
               Behaviors.same
-            }
 
-          case Run =>
-            context.log.info("Starting {} messages", numberOfMessages)
-            startTime = System.nanoTime()
-            producerController ! ShardingProducerController.Start(requestNextAdapter)
-            Behaviors.same
+            case PrintStatus =>
+              context.log.infoN(
+                "Remaining {}. Latest demand {}. Messages sent {}. Expecting demand from {}",
+                remaining,
+                latestDemand,
+                messagesSentToEachEntity,
+                (remaining % testSettings.numberOfConsumers))
+              Behaviors.same
+          }
         }
       }
     }
+
   }
 
   final case class TestSettings(testName: String, totalMessages: Long, numberOfConsumers: Int)

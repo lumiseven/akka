@@ -205,8 +205,8 @@ target PR branch you can do so by setting the PR_TARGET_BRANCH environment varia
 PR_TARGET_BRANCH=origin/example sbt validatePullRequest
 ```
 
-If you have already run all tests and now just need to check that everything is formatted and or mima passes there
-are a set of `all*` commands aliases for running `test:compile` (also formats), `mimaReportBinaryIssues`, and `validateCompile` 
+If you already ran all tests and just need to check formatting and mima, there
+is a set of `all*` command aliases that run `test:compile` (also formats), `mimaReportBinaryIssues`, and `validateCompile` 
 (compiles `multi-jvm` if enabled for that project). See `build.sbt` or use completion to find the most appropriate one 
 e.g. `allCluster`, `allTyped`.
 
@@ -411,7 +411,7 @@ In order to force the `validatePullRequest` task to build the entire project, re
 changes one can use the special `PLS BUILD ALL` command (typed in a comment on GitHub, on the pull request), which will cause
 the validator to test all projects.
 
-Note, that `OK TO TEST` will only be picked up when the user asking for it is considered an admin. Public (!) members of the [akka organization](https://github.com/orgs/akka/people) are automatically considered admins and users manually declared admin in the Jenkins job (currently no one is explicitly listed). `PLS BUILD` and `PLS BUILD ALL` can be issued by everyone that is an admin or everyone who was whitelisted in the Jenkins Job (whitelisting != declaring someone an admin).
+Note, that `OK TO TEST` will only be picked up when the user asking for it is considered an admin. Public (!) members of the [akka organization](https://github.com/orgs/akka/people) are automatically considered admins and users manually declared admin in the Jenkins job (currently no one is explicitly listed). `PLS BUILD` and `PLS BUILD ALL` can be issued by everyone that is an admin or everyone who was given permission in the Jenkins Job.
 
 ## Source style
 
